@@ -1,0 +1,285 @@
+/*
+* Menyoo PC - Grand Theft Auto V single-player trainer mod
+* Copyright (C) 2019  MAFINS
+*
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*/
+#pragma once
+/* When you make a crappy menu structure originally written in C in 2015 and decide to keep it */
+
+#include "submenu_enum.h"
+#include "..\Scripting\enums.h"
+#include "..\Scripting\Scaleform.h"
+
+#include <utility>
+#include <vector>
+//#include <array>
+#include <string>
+#include <functional>
+#include <optional>
+
+typedef int INT, BOOL;
+typedef signed char INT8;
+typedef short INT16;
+typedef unsigned int UINT;
+typedef unsigned __int8 UINT8;
+typedef unsigned short UINT16;
+typedef unsigned long DWORD;
+typedef char *PCHAR;
+
+namespace VirtualKey {
+	enum VirtualKey : int;
+}
+
+class Vector2;
+
+class RGBA;
+class RgbS;
+
+//struct Scaleform_IbT { int button; std::string text; bool isKey; };
+//class Scaleform;
+
+
+#define GTA_SCROLLOP 8
+#define GTA_BETOP 6
+#define GTA_MAXOP 14
+
+
+float get_xcoord_at_menu_rightEdge(float widthOfElement, float extraWidth, bool centered);
+float get_xcoord_at_menu_leftEdge(float width, bool centered);
+
+namespace MenuPressTimer
+{
+	enum class Button
+	{
+		None, Up, Down, Left, Right, Back, Accept
+	};
+	extern MenuPressTimer::Button trackedButton;
+	extern DWORD inputRepeatDeadline;
+
+	void Update();
+	bool IsButtonHeld(const MenuPressTimer::Button& button);
+	bool IsButtonTapped(const MenuPressTimer::Button& button);
+	bool IsButtonHeldOrTapped(const MenuPressTimer::Button& button);
+}
+
+extern bool titleBarStripeVisible;
+extern bool numberInputActive;
+extern bool menuHasNotOpened;
+
+extern Vector2 menuPos;
+extern Vector2 g_deltaCursorNormal;
+extern float currentOptionY;
+
+extern INT8 font_title;
+extern INT8 font_options;
+extern INT8 font_selection;
+extern INT8 font_breaks;
+extern INT8 font_hud;
+extern INT8 font_speedo;
+
+extern RGBA titlebox;
+extern RGBA BG;
+extern RGBA titletext;
+extern RGBA optiontext;
+extern RGBA selectedtext;
+extern RGBA optionbreaks;
+extern RGBA optioncount;
+extern RGBA selectionhi;
+extern RGBA _globalPedTrackers_Col;
+
+extern INT8 g_loglevel;
+
+class MenuInput final
+{
+public:
+
+	static bool IsUsingController();
+	static void UpdateDeltaCursorNormal();
+
+};
+
+class MouseSupport final
+{
+public:
+	static bool mouseSelectionConfirmed;
+	static INT mouseSelectedOptionIndex;
+	struct ItemNumber { INT menuOptionIndex; INT screenRowIndex; };
+	static std::vector<ItemNumber> visibleItems;
+
+	static INT ItemNumberToItemNumberOnScreen(INT itemNumber);
+
+	static Vector2 ItemNumberToItemCoords(INT itemNumber);
+
+	static void Tick();
+
+	static void DisableControls();
+
+	static void DoMouseTick();
+
+	static void DrawOptionHighlight();
+
+	static Vector2 GetSafezoneBounds();
+
+	static Vector2 MousePosition();
+	static bool IsMouseInBounds(Vector2 const& boxCentre, Vector2 const& boxSize);
+
+	static std::pair<int, int> GetScreenResolutionMantainRatio();
+
+	static void DoScrollChecks();
+
+};
+
+class Menu final
+{
+public:
+	static UINT16 activeSubmenu, lastOpenedSubmenu;
+	static INT selectedOptionIndex;
+	static INT* activeOptionIndex;
+	static INT selectedOptionWithBreaks;
+	static INT totalOptionCount;
+	static INT currentOptionCount;
+	static UINT16 currentBreakCount;
+	static UINT16 totalBreakCount;
+	static UINT8 activeBreakScrollDirection;
+	static INT16 menuHistoryIndex;
+	static INT submenuHistory[100];
+	static INT optionSelectionHistory[100];
+	static INT pendingSubmenu;
+	static int nextDeferredActionTime;
+	static bool usingControllerInput, usingMouseInput, centerTitleText, centerOptionText, centerBreakText, useGradientBackgrounds, drawSeparatorLine, enableGlareEffect, optionTextStroke;
+	static Scaleform scaleform_menuGlare, instructional_buttons;
+	static std::vector<Scaleform_IbT> vIB;
+	static std::function<void()> OnSubBack;
+	static std::string selectedOptionDescription;
+
+
+	static inline void Tick()
+	{
+		MouseSupport::Tick();
+		Menu::base();
+		Menu::loops();
+		Menu::sub_handler();
+	}
+
+	static void loops();
+	static void sub_handler();
+	static void submenu_switch();
+	static void justopened();
+	static bool IsGameReadyForDeferredInit();
+	static void TickDeferredMenuInit();
+
+	static void SetInputMethods();
+	static void DisableControls();
+	static void base();
+	static void RequestMenuTextures();
+	static void titlebox_draw();
+	static void background();
+	static void optionhi();
+	static void draw_description();
+	static bool isBinds();
+	static void while_closed();
+	static void while_opened();
+	static bool isStopAnimBinds();
+	static void while_stopanim();
+	static void Up(bool playSound = true);
+	static void Down(bool playSound = true);
+	static void Bottom(bool playSound = true);
+	static void Top(bool playSound = true);
+	static bool IsLastDrawnOptionSelected();
+	static bool IsSelectionAtBottom();
+	static bool IsSelectionAtTop();
+	static bool IsSelectionPastDrawnOptions();
+	static void SetPreviousMenu();
+	static void NewSetMenu(INT sub_index);
+	static void SetSub_closed();
+
+	static void glare_test();
+
+	static void set_opened_IB();
+	static void add_IB(ControllerInput button_id, std::string string_val);
+	static void add_IB(VirtualKey::VirtualKey button_id, std::string string_val);
+	static void add_IB(ScaleformButton button_id, std::string string_val);
+	// Two-member combo overloads: both keycaps/button glyphs are drawn in one slot.
+	static void add_IB(ControllerInput button_id, ControllerInput button2_id, std::string string_val);
+	static void add_IB(VirtualKey::VirtualKey button_id, VirtualKey::VirtualKey button2_id, std::string string_val);
+	static std::string get_key_IB(const Scaleform_IbT& ib);
+	static void draw_IB();
+
+};
+
+
+bool IsOptionPressed();
+bool IsOptionRPressed();
+bool IsOptionLPressed();
+
+extern bool null;
+extern int inull;
+void nullFunc();
+
+enum class TICKOL : UINT8
+{
+	NONE,
+	TICK,
+	TICK2,
+	CROSS,
+	BOXTICK,
+	BOXCROSS,
+	BOXBLANK,
+	ARROWRIGHT,
+	ARROWLEFT,
+	CARTHING,
+	BIKETHING,
+	WEAPONTHING,
+	TATTOOTHING,
+	MAKEUPTHING,
+	MASKTHING,
+	MANWON,
+	SKULL_DM,
+	SKULL_TDM,
+	CARBANG_DM,
+	SMALLNEWSTAR,
+	PERCENTAGESTICKER,
+};
+
+void AddTitle(std::string text);
+void AddOption(std::string text, bool &option_code_bool = null, void(&callback)() = nullFunc, int submenu_index = -1, bool show_arrow = 0, bool gxt = 0);
+inline void AddOption(std::ostream& os, bool &option_code_bool = null, void(&callback)() = nullFunc, int submenu_index = -1, bool show_arrow = 0, bool gxt = 0);
+void OptionStatus(BOOL status);
+// Attaches a description to the option added just before this call; shown below the menu while that option is selected
+void AddOptionDescription(const std::string& text);
+void AddToggle(const std::string& text, bool &loop_variable, bool &extra_option_code_ON = null, bool &extra_option_code_OFF = null, bool gxt = 0);
+void AddToggle(const std::string& text, bool &loop_variable, void(&callback_ON)(), void(&callback_OFF)(), bool gxt = 0);
+void AddLocal(const std::string& text, BOOL condition, bool &option_code_ON, bool &option_code_OFF, bool gxt = 0);
+void AddLocal(const std::string& text, BOOL condition, void(&callback_ON)(), void(&callback_OFF)(), bool gxt = 0);
+void AddBreak(std::string text);
+void AddNumber(const std::string& text, double value, __int8 decimal_places, bool &A_PRESS = null, bool &RIGHT_PRESS = null, bool &LEFT_PRESS = null, bool gxt = 0);
+void draw_tickol_tick_BNW(const std::string& textureDict, const std::string& normal, const std::string& selected, const RGBA& colour);
+inline void draw_tickol_tick(TICKOL tickType, float rotation = 0.0f);
+void AddTickol(const std::string& text, BOOL condition, bool &option_code_ON, bool &option_code_OFF, TICKOL tickTrue = TICKOL::TICK, TICKOL tickFalse = TICKOL::NONE, bool gxt = false, float rotationTrue = 0.0f, float rotationFalse = 0.0f);
+void AddTickol(const std::string& text, BOOL condition, void(&callback_ON)(), void(&callback_OFF)(), TICKOL tickTrue = TICKOL::TICK, TICKOL tickFalse = TICKOL::NONE, bool gxt = false, float rotationTrue = 0.0f, float rotationFalse = 0.0f);
+void AddTexter(const std::string& text, int selectedindex, const std::vector<std::string>& textarray, bool &A_PRESS = null, bool &RIGHT_PRESS = null, bool &LEFT_PRESS = null, bool gxt = 0);
+
+int AddTexterCycler(const std::string& label, int currentIdx, const std::vector<std::string>& opts);
+int AddTexterCycler(const std::string& label, int currentIdx, const std::vector<std::string>& opts, bool &pressed);
+
+// Displays a right-aligned bind key/button and captures a replacement when pressed.
+void AddKeybindOption(const std::string& label, const std::string& bindText, const std::string& description, bool &A_PRESS, bool capturingThis);
+
+// Returns true when the value changed this frame
+template<typename T>
+bool AddNumberStepper(const std::string& text, T &value, __int8 decimal_places, double step_size, std::optional<double> min = std::nullopt, std::optional<double> max = std::nullopt, bool gxt = 0, bool wrap = false);
+template<typename T>
+// invert: false = right multiplies / left divides, true = left multiplies / right divides
+void AddNumberMultiplier(const std::string& text, T &value, __int8 decimal_places, double multiplier, std::optional<double> min = std::nullopt, std::optional<double> max = std::nullopt, bool invert = false, bool gxt = 0);
+
+void AddPresetColourOptionsPreviews(UINT8 const r, UINT8 const g, UINT8 const b);
+void AddPresetColourOptionsPreview(const RgbS& rgb);
+void AddPresetColourOptionsPreviews(const RGBA& rgb);
+bool AddPresetColourOptions(INT& r, INT& g, INT& b);
+
+
+

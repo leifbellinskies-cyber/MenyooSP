@@ -1,0 +1,148 @@
+name: Master_Build
+
+on:
+  push:
+    branches:
+      - '**'
+    tags: [ "v*" ]
+
+env:
+  BUILD_CONFIGURATION: Release
+
+permissions:
+  contents: read
+
+jobs:
+  validate-tag:
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      stable: ${{ steps.validate.outputs.stable }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate stable release tag
+        id: validate
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          stable=false
+
+          if [[ "$TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            stable=true
+          fi
+
+          # Function to check for existing PR with the same version
+          check_pr_exists() {
+            PR_LIST=$(gh pr list --head Development --base main --state open --json title,body)
+            PR_EXIST=$(echo "$PR_LIST" | jq -r --arg VERSION "$VERSION" '.[] | select((.title | contains($VERSION)) or (.body | contains($VERSION)))')
+            [ -n "$PR_EXIST" ]
+          }
+
+          if [[ $VERSION =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version is a full release. Creating pull request to merge into main."
+            echo "## Check for existing PR"
+            if check_pr_exists; then
+              echo "PR already exists with version $VERSION."
+              echo "CANCELJOB=true" >> $GITHUB_ENV
+              exit 0
+            fi
+            echo "Creating new PR."
+            gh pr create --title "Release $VERSION" --body "Merging development into main for release $VERSION" --base main --head Development
+            echo "CANCELJOB=true" >> $GITHUB_ENV
+            exit 0
+          elif [[ $VERSION =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(a|b|rc)[0-9]+$ ]]; then
+            echo "Version is a private pre-release. Cancelling workflow."
+            echo "CANCELJOB=true" >> $GITHUB_ENV
+          else
+            echo "stable=false" >> "$GITHUB_OUTPUT"
+            echo "$TAG is not an exact stable SemVer release tag."
+          fi
+
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Generate solution with Premake
+        run: Solution/external/premake/premake5.exe vs2022
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Build
+        run: msbuild /m /p:Configuration=${{ env.BUILD_CONFIGURATION }} /p:Platform=x64 Solution/Menyoo.sln -verbosity:minimal
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: MenyooSP
+          path: |
+            Solution/source/_Build/bin/Release/
+            !Solution/source/_Build/bin/Release/Trash/
+            !Solution/source/_Build/bin/Release/*.map
+
+  release:
+    if: needs.validate-tag.outputs.stable == 'true'
+    needs:
+      - build
+      - validate-tag
+    permissions:
+      contents: write
+    name: Release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: MenyooSP
+          path: MenyooSP
+
+      - name: Zip artifact for deployment
+        run: Compress-Archive -Path "MenyooSP/*" -DestinationPath "MenyooSP.zip"
+
+      - name: Generate release notes
+        shell: bash
+        env:
+          TAG: ${{ github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          previous_tag=$(git tag --merged "$GITHUB_SHA" --list 'v[0-9]*' | \
+            grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | \
+            grep -Fxv "$TAG" | sort -V | tail -n 1)
+
+          if [[ -n "$previous_tag" ]]; then
+            range="$previous_tag..$TAG"
+            heading="Full Changelog: $previous_tag...$TAG"
+          else
+            range="$TAG"
+            heading="Full Changelog: $TAG"
+          fi
+
+          {
+            echo '<details>'
+            echo "<summary>$heading</summary>"
+            echo
+            git log --format='- [`%h`](https://github.com/'"$REPOSITORY"'/commit/%H) %s' --no-decorate "$range"
+            echo
+            echo '</details>'
+          } > release-notes.md
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: false
+          body_path: release-notes.md
+          files: MenyooSP.zip
